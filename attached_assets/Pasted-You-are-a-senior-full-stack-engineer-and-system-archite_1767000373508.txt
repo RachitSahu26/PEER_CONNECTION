@@ -1,0 +1,92 @@
+You are a senior full-stack engineer and system architect.
+
+Build a PRODUCTION-GRADE web application called **"Random Global Calling Platform"** where registered users can get randomly connected with another online user for a real-time AUDIO call.
+
+STRICT REQUIREMENTS:
+
+TECH STACK
+- Frontend: React + TypeScript + Tailwind CSS
+- Backend: Node.js + Express + TypeScript
+- Real-time: Socket.IO
+- Calling: WebRTC (audio-only)
+- Database: MongoDB (with Mongoose)
+- Cache / Online users: Redis (mock Redis allowed if not available)
+- Auth: JWT (email + password)
+- Payments: Subscription logic (mock Stripe)
+- Repo structure must be CLEAN and PROFESSIONAL
+
+CORE FEATURES
+1. User Authentication
+   - Signup / Login
+   - JWT-based auth
+   - Protected routes
+
+2. Online Presence System
+   - Track online users via Socket.IO
+   - Store online users in Redis (or in-memory abstraction with Redis-like interface)
+
+3. Random Matchmaking
+   - When user clicks "Connect", randomly pair them with another available online user
+   - Prevent self-connection
+   - Skip users who are already in a call
+   - Use a queue or pool-based matchmaking strategy
+
+4. Real-Time Audio Calling
+   - Use WebRTC (audio only)
+   - Implement signaling via Socket.IO
+   - Proper handling of:
+     - offer / answer
+     - ICE candidates
+     - call disconnect
+
+5. Call Feedback System
+   - After call ends, show feedback modal:
+     - 👍 Like
+     - 👎 Dislike
+     - 🚩 Report
+   - Store feedback in database
+   - Maintain user reputation score
+
+6. Abuse & Safety Logic
+   - Block users with repeated bad feedback
+   - Rate-limit calls per user
+   - Auto-disconnect idle calls
+
+7. Subscription System (Mock)
+   - Free users:
+     - Limited calls per day
+     - Waiting time before match
+   - Premium users:
+     - Unlimited calls
+     - Priority matching
+   - Subscription logic only (no real payment required)
+
+8. UI
+   - Clean, modern UI
+   - Pages:
+     - Login / Signup
+     - Dashboard (online users count)
+     - Calling screen
+     - Feedback modal
+     - Profile (reputation + stats)
+
+ARCHITECTURE & QUALITY
+- Use modular folder structure
+- Proper TypeScript types
+- Comments explaining:
+  - WebRTC flow
+  - Socket.IO events
+  - Matchmaking logic
+- Error handling
+- Environment variables
+- README.md explaining:
+  - Architecture
+  - How matchmaking works
+  - How WebRTC signaling works
+  - Scaling strategy (Redis, horizontal scaling)
+
+IMPORTANT
+- Code must run inside Replit
+- Avoid unnecessary libraries
+- Write code as if this will be reviewed by a senior backend interviewer
+- Focus on clarity, not shortcuts
