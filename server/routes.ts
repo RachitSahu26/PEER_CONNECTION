@@ -1,5 +1,5 @@
 import type { Express } from "express";
-import { createServer, type Server } from "http";
+import type { Server } from "http";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
 import { api, WS_EVENTS, type SignalPayload } from "@shared/routes";
@@ -10,20 +10,25 @@ import { promisify } from "util";
 
 const scryptAsync = promisify(scrypt);
 
+/* ---------------- PASSWORD UTILS ---------------- */
+
 async function hashPassword(password: string) {
   const salt = randomBytes(16).toString("hex");
   const buf = (await scryptAsync(password, salt, 64)) as Buffer;
   return `${buf.toString("hex")}.${salt}`;
 }
 
+/* ---------------- ROUTES ---------------- */
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-  // Setup Auth
+  /* ---------- AUTH ---------- */
   setupAuth(app);
 
-  // API Routes
+  /* ---------- API ---------- */
+
   app.get(api.auth.me.path, (req, res) => {
     if (req.isAuthenticated()) {
       res.json(req.user);
@@ -33,13 +38,16 @@ export async function registerRoutes(
   });
 
   app.post(api.feedback.submit.path, async (req, res) => {
-    if (!req.isAuthenticated()) return res.sendStatus(401);
-    
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+
     try {
       const input = api.feedback.submit.input.parse({
         ...req.body,
-        fromUserId: req.user.id
+        fromUserId: req.user.id,
       });
+
       await storage.createFeedback(input);
       res.status(201).send();
     } catch (err) {
@@ -51,13 +59,14 @@ export async function registerRoutes(
     }
   });
 
-  // Socket.IO & Matchmaking
+  /* ---------- SOCKET.IO / MATCHMAKING ---------- */
+
   const io = new SocketIOServer(httpServer, {
     path: "/socket.io",
     cors: {
       origin: "*",
-      methods: ["GET", "POST"]
-    }
+      methods: ["GET", "POST"],
+    },
   });
 
   const waitingQueue: string[] = [];
@@ -67,14 +76,11 @@ export async function registerRoutes(
     console.log("User connected:", socket.id);
 
     socket.on(WS_EVENTS.JOIN_QUEUE, () => {
-      // Remove from queue if already there to prevent dups
       const existingIdx = waitingQueue.indexOf(socket.id);
       if (existingIdx !== -1) waitingQueue.splice(existingIdx, 1);
 
       waitingQueue.push(socket.id);
-      console.log(`User ${socket.id} joined queue. Queue size: ${waitingQueue.length}`);
 
-      // Matchmaking Logic
       if (waitingQueue.length >= 2) {
         const p1 = waitingQueue.shift();
         const p2 = waitingQueue.shift();
@@ -83,12 +89,15 @@ export async function registerRoutes(
           activeCalls.set(p1, p2);
           activeCalls.set(p2, p1);
 
-          console.log(`Matched ${p1} with ${p2}`);
+          io.to(p1).emit(WS_EVENTS.MATCH_FOUND, {
+            partnerId: p2,
+            initiator: true,
+          });
 
-          // Notify P1 (Initiator)
-          io.to(p1).emit(WS_EVENTS.MATCH_FOUND, { partnerId: p2, initiator: true });
-          // Notify P2 (Receiver)
-          io.to(p2).emit(WS_EVENTS.MATCH_FOUND, { partnerId: p1, initiator: false });
+          io.to(p2).emit(WS_EVENTS.MATCH_FOUND, {
+            partnerId: p1,
+            initiator: false,
+          });
         }
       }
     });
@@ -99,19 +108,16 @@ export async function registerRoutes(
     });
 
     socket.on(WS_EVENTS.SIGNAL, (payload: SignalPayload) => {
-      // Forward signal to specific partner
       io.to(payload.to).emit(WS_EVENTS.SIGNAL, {
         from: socket.id,
-        ...payload
+        signal: payload.signal,
       });
     });
 
     socket.on("disconnect", () => {
-      // Remove from queue
       const idx = waitingQueue.indexOf(socket.id);
       if (idx !== -1) waitingQueue.splice(idx, 1);
 
-      // Notify partner if in call
       const partnerId = activeCalls.get(socket.id);
       if (partnerId) {
         io.to(partnerId).emit(WS_EVENTS.PARTNER_DISCONNECTED);
@@ -121,16 +127,20 @@ export async function registerRoutes(
     });
   });
 
-  // SEED DATA
+  /* ---------- DEV SEED DATA ---------- */
+
   if (process.env.NODE_ENV !== "production") {
     const existingUser = await storage.getUserByUsername("user1");
+
     if (!existingUser) {
       console.log("Seeding users...");
       const hashedPassword = await hashPassword("password");
-      await storage.createUser({ username: "user1", password: hashedPassword, reputation: 100, isPremium: false });
-      await storage.createUser({ username: "user2", password: hashedPassword, reputation: 100, isPremium: false });
-      await storage.createUser({ username: "user3", password: hashedPassword, reputation: 100, isPremium: true });
-      console.log("Seeding complete: user1, user2, user3 (password: password)");
+
+      await storage.createUser({ username: "user1", password: hashedPassword });
+      await storage.createUser({ username: "user2", password: hashedPassword });
+      await storage.createUser({ username: "user3", password: hashedPassword });
+
+      console.log("Seeded users: user1, user2, user3 (password: password)");
     }
   }
 

@@ -1,13 +1,14 @@
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
-import { Express } from "express";
+import type { Express } from "express";
 import session from "express-session";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { storage } from "./storage";
-import { User } from "@shared/schema";
 
 const scryptAsync = promisify(scrypt);
+
+/* ---------------- PASSWORD HELPERS ---------------- */
 
 async function hashPassword(password: string) {
   const salt = randomBytes(16).toString("hex");
@@ -22,9 +23,11 @@ async function comparePasswords(supplied: string, stored: string) {
   return timingSafeEqual(hashedBuf, suppliedBuf);
 }
 
+/* ---------------- AUTH SETUP ---------------- */
+
 export function setupAuth(app: Express) {
   const sessionSettings: session.SessionOptions = {
-    secret: process.env.SESSION_SECRET || "random_secret_key",
+    secret: process.env.SESSION_SECRET || "dev_secret",
     resave: false,
     saveUninitialized: false,
     store: storage.sessionStore,
@@ -39,23 +42,31 @@ export function setupAuth(app: Express) {
   app.use(passport.initialize());
   app.use(passport.session());
 
+  /* ---------- PASSPORT STRATEGY ---------- */
+
   passport.use(
     new LocalStrategy(async (username, password, done) => {
       try {
         const user = await storage.getUserByUsername(username);
-        if (!user || !(await comparePasswords(password, user.password))) {
-          return done(null, false);
-        } else {
-          return done(null, user);
-        }
+        if (!user) return done(null, false);
+
+        const valid = await comparePasswords(password, user.password);
+        if (!valid) return done(null, false);
+
+        return done(null, user);
       } catch (err) {
         return done(err);
       }
-    }),
+    })
   );
 
-  passport.serializeUser((user, done) => done(null, (user as User).id));
-  passport.deserializeUser(async (id: number, done) => {
+  /* ---------- SESSION SERIALIZATION ---------- */
+
+  passport.serializeUser((user: any, done) => {
+    done(null, user._id.toString()); // Mongo ObjectId
+  });
+
+  passport.deserializeUser(async (id: string, done) => {
     try {
       const user = await storage.getUser(id);
       done(null, user);
@@ -64,16 +75,18 @@ export function setupAuth(app: Express) {
     }
   });
 
+  /* ---------- ROUTES ---------- */
+
   app.post("/api/register", async (req, res, next) => {
     try {
       const existingUser = await storage.getUserByUsername(req.body.username);
       if (existingUser) {
-        return res.status(400).send("Username already exists");
+        return res.status(400).json({ message: "Username already exists" });
       }
 
       const hashedPassword = await hashPassword(req.body.password);
       const user = await storage.createUser({
-        ...req.body,
+        username: req.body.username,
         password: hashedPassword,
       });
 

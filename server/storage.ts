@@ -1,48 +1,51 @@
-import { db } from "./db";
-import { users, feedbacks, type User, type InsertUser, type Feedback, type InsertFeedback } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { User } from "./models/user";
+import { Feedback } from "./models/feedback";
 import session from "express-session";
-import connectPg from "connect-pg-simple";
-import { pool } from "./db";
-
-const PostgresSessionStore = connectPg(session);
+import MongoStore from "connect-mongo";
+import type { MongoClient } from "mongodb";
 
 export interface IStorage {
-  getUser(id: number): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
-  createFeedback(feedback: InsertFeedback): Promise<Feedback>;
+  getUser(id: string): Promise<any | null>;
+  getUserByUsername(username: string): Promise<any | null>;
+  createUser(user: { username: string; password: string }): Promise<any>;
+  createFeedback(feedback: {
+    fromUserId: string;
+    toUserId: string;
+    type: "like" | "dislike" | "report";
+    comment?: string;
+  }): Promise<any>;
   sessionStore: session.Store;
 }
 
 export class DatabaseStorage implements IStorage {
-  sessionStore: session.Store;
+  sessionStore!: session.Store;
 
-  constructor() {
-    this.sessionStore = new PostgresSessionStore({
-      pool,
-      createTableIfMissing: true,
+  initSessionStore(client: MongoClient) {
+    this.sessionStore = MongoStore.create({
+      client,
+      collectionName: "sessions",
     });
   }
 
-  async getUser(id: number): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.id, id));
-    return user;
+  async getUser(id: string) {
+    return User.findById(id);
   }
 
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.username, username));
-    return user;
+  async getUserByUsername(username: string) {
+    return User.findOne({ username });
   }
 
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const [user] = await db.insert(users).values(insertUser).returning();
-    return user;
+  async createUser(user: { username: string; password: string }) {
+    return User.create(user);
   }
 
-  async createFeedback(feedback: InsertFeedback): Promise<Feedback> {
-    const [created] = await db.insert(feedbacks).values(feedback).returning();
-    return created;
+  async createFeedback(feedback: {
+    fromUserId: string;
+    toUserId: string;
+    type: "like" | "dislike" | "report";
+    comment?: string;
+  }) {
+    return Feedback.create(feedback);
   }
 }
 

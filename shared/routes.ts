@@ -1,5 +1,6 @@
-import { z } from 'zod';
-import { insertUserSchema, insertFeedbackSchema, users } from './schema';
+import { z } from "zod";
+
+/* ---------------- ERROR SCHEMAS ---------------- */
 
 export const errorSchemas = {
   validation: z.object({
@@ -13,47 +14,64 @@ export const errorSchemas = {
   }),
 };
 
+/* ---------------- API CONTRACTS ---------------- */
+
 export const api = {
   auth: {
     register: {
-      method: 'POST' as const,
-      path: '/api/register',
-      input: insertUserSchema,
+      method: "POST" as const,
+      path: "/api/register",
+      input: z.object({
+        username: z.string(),
+        password: z.string(),
+      }),
       responses: {
-        201: z.custom<typeof users.$inferSelect>(),
+        201: z.any(),
         400: errorSchemas.validation,
       },
     },
+
     login: {
-      method: 'POST' as const,
-      path: '/api/login',
-      input: insertUserSchema.pick({ username: true, password: true }),
+      method: "POST" as const,
+      path: "/api/login",
+      input: z.object({
+        username: z.string(),
+        password: z.string(),
+      }),
       responses: {
-        200: z.custom<typeof users.$inferSelect>(),
+        200: z.any(),
         401: errorSchemas.unauthorized,
       },
     },
+
     logout: {
-      method: 'POST' as const,
-      path: '/api/logout',
+      method: "POST" as const,
+      path: "/api/logout",
       responses: {
         200: z.void(),
       },
     },
+
     me: {
-      method: 'GET' as const,
-      path: '/api/user',
+      method: "GET" as const,
+      path: "/api/user",
       responses: {
-        200: z.custom<typeof users.$inferSelect>(),
+        200: z.any(),
         401: errorSchemas.unauthorized,
       },
     },
   },
+
   feedback: {
     submit: {
-      method: 'POST' as const,
-      path: '/api/feedback',
-      input: insertFeedbackSchema,
+      method: "POST" as const,
+      path: "/api/feedback",
+      input: z.object({
+        fromUserId: z.string(),
+        toUserId: z.string(),
+        type: z.enum(["like", "dislike", "report"]),
+        comment: z.string().optional(),
+      }),
       responses: {
         201: z.void(),
         400: errorSchemas.validation,
@@ -62,31 +80,38 @@ export const api = {
   },
 };
 
-export function buildUrl(path: string, params?: Record<string, string | number>): string {
+/* ---------------- URL BUILDER ---------------- */
+
+export function buildUrl(
+  path: string,
+  params?: Record<string, string | number>
+): string {
   let url = path;
   if (params) {
     Object.entries(params).forEach(([key, value]) => {
-      if (url.includes(`:${key}`)) {
-        url = url.replace(`:${key}`, String(value));
-      }
+      url = url.replace(`:${key}`, String(value));
     });
   }
   return url;
 }
 
+/* ---------------- SOCKET EVENTS ---------------- */
+
 export const WS_EVENTS = {
-  CONNECT: 'connection',
-  DISCONNECT: 'disconnect',
-  JOIN_QUEUE: 'join-queue',
-  LEAVE_QUEUE: 'leave-queue',
-  MATCH_FOUND: 'match-found',
-  SIGNAL: 'signal', // Generic WebRTC signaling (offer, answer, candidate)
-  PARTNER_DISCONNECTED: 'partner-disconnected',
-  ERROR: 'error'
+  CONNECT: "connection",
+  DISCONNECT: "disconnect",
+  JOIN_QUEUE: "join-queue",
+  LEAVE_QUEUE: "leave-queue",
+  MATCH_FOUND: "match-found",
+  SIGNAL: "signal",
+  PARTNER_DISCONNECTED: "partner-disconnected",
+  ERROR: "error",
 } as const;
 
+/* ---------------- SOCKET PAYLOAD ---------------- */
+
 export interface SignalPayload {
-  to: string; // socket id of target
-  type: 'offer' | 'answer' | 'ice-candidate';
+  to: string;
+  type: "offer" | "answer" | "ice-candidate";
   data: any;
 }

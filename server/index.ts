@@ -1,7 +1,14 @@
+import "dotenv/config";
 import express, { type Request, Response, NextFunction } from "express";
+import { connectMongo } from "./mongo";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
+import { getMongoClient } from "./mongo";
+import { storage } from "./storage";
+
+
+
 
 const app = express();
 const httpServer = createServer(app);
@@ -60,6 +67,10 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  await connectMongo();
+  storage.initSessionStore(getMongoClient());
+
+
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
@@ -85,14 +96,9 @@ app.use((req, res, next) => {
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
   const port = parseInt(process.env.PORT || "5000", 10);
-  httpServer.listen(
-    {
-      port,
-      host: "0.0.0.0",
-      reusePort: true,
-    },
-    () => {
-      log(`serving on port ${port}`);
-    },
-  );
+
+  httpServer.listen(port, "0.0.0.0", () => {
+  log(`serving on port ${port}`);
+});
+
 })();
